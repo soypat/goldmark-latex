@@ -13,14 +13,16 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
+var _ renderer.NodeRenderer = &latex.Renderer{} // Compile time check of interface implementation.
+
 //go:embed _data.md
 var data []byte
 
 func TestRenderer(t *testing.T) {
-	lr := latex.NewRenderer()
-	lrr := lr.(*latex.Renderer)
-	// lrr.Config.DeclareUnicode = func(r rune) (string, bool) { return "", true }
-	r := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(lrr, 1000)))
+	lr := latex.NewRenderer(latex.Config{
+		Unsafe: true,
+	})
+	r := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(lr, 1000)))
 	md := goldmark.New(goldmark.WithRenderer(r))
 	var output bytes.Buffer
 	err := md.Convert(data, &output)

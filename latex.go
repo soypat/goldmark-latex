@@ -14,6 +14,7 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
+// Config contains parameters for controlling LaTeX output of a Renderer.
 type Config struct {
 	// Increase heading levels: if the offset is 1, \section (1) becomes \subsection (2) etc.
 	// Negative offset is also valid.
@@ -31,11 +32,14 @@ type Config struct {
 	DeclareUnicode func(rune) (raw string, isReplaced bool)
 }
 
+// SetLatexOption implements the Option interface.
+func (r Config) SetLatexOption(c *Config) { *c = r }
+
 //go:embed header.tex
 var defaultHeader []byte
 
-var _ renderer.NodeRenderer = &Renderer{}
-
+// Renderer is a LaTeX renderer implementation for extending
+// goldmark to generate .tex files.
 type Renderer struct {
 	Config Config
 }
@@ -46,6 +50,15 @@ type Option interface {
 }
 
 // NewRenderer returns a new Renderer with given options.
+// Options are applied in order of appearance.
+// Example:
+//
+//	lr := latex.NewRenderer(latex.Config{
+//		Unsafe: true, // Add desired configuration options.
+//	})
+//	r := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(lr, 1000)))
+//	md := goldmark.New(goldmark.WithRenderer(r))
+//	md.Convert(markdown, LaTeXoutput)
 func NewRenderer(opts ...Option) renderer.NodeRenderer {
 	r := &Renderer{
 		Config: Config{},
@@ -56,9 +69,9 @@ func NewRenderer(opts ...Option) renderer.NodeRenderer {
 	return r
 }
 
+// RegisterFuncs implements goldmark's renderer.NodeRenderer interface.
 func (r *Renderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	// blocks
-
 	reg.Register(ast.KindDocument, r.renderDocument)
 	reg.Register(ast.KindHeading, r.renderHeading)
 	reg.Register(ast.KindBlockquote, r.renderBlockquote)
@@ -72,7 +85,6 @@ func (r *Renderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(ast.KindThematicBreak, r.renderThematicBreak)
 
 	// inlines
-
 	reg.Register(ast.KindAutoLink, r.renderAutoLink)
 	reg.Register(ast.KindCodeSpan, r.renderCodeSpan)
 	reg.Register(ast.KindEmphasis, r.renderEmphasis)
