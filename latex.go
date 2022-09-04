@@ -36,9 +36,6 @@ type Config struct {
 // SetLatexOption implements the Option interface.
 func (r Config) SetLatexOption(c *Config) { *c = r }
 
-//go:embed header.tex
-var defaultHeader []byte
-
 // Renderer is a LaTeX renderer implementation for extending
 // goldmark to generate .tex files.
 type Renderer struct {
@@ -104,7 +101,7 @@ func (r *Renderer) renderDocument(w util.BufWriter, source []byte, node ast.Node
 	}
 
 	if r.Config.Preamble == nil {
-		w.Write(defaultHeader)
+		w.Write(defaultPreamble)
 	} else {
 		w.Write(r.Config.Preamble)
 	}
@@ -140,6 +137,19 @@ func (r *Renderer) renderDocument(w util.BufWriter, source []byte, node ast.Node
 	}
 	w.WriteString("\n\\begin{document}\n")
 	return ast.WalkContinue, nil
+}
+
+// Do not modify.
+//
+//go:embed defaultPreamble.tex
+var defaultPreamble []byte
+
+// DefaultPreamble returns a copy of the default preamble provided by goldmark-latex.
+// It does not include \begin{document} text within, as expected by Config.Preamble.
+func DefaultPreamble() []byte {
+	cp := make([]byte, len(defaultPreamble))
+	copy(cp, defaultPreamble)
+	return cp
 }
 
 func (r *Renderer) renderHeading(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
