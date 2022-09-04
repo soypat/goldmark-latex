@@ -9,6 +9,7 @@
 \usepackage{verbatim}
 \usepackage[normalem]{ulem}
 \usepackage{hyperref}
+\usepackage{textcomp} % Required for lstlisting to render `'` as is using upquote=true.
 
 \hypersetup{colorlinks,%
   citecolor=black,%
@@ -33,14 +34,14 @@
   backgroundcolor=\color{gray!10},
   inputencoding=utf8,
   extendedchars=true,
-  literate={-}{-}1 {*}{*}1 {'}{'}1 {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1 {ü}{{\:u}}1,
+  literate={-}{-}1 {*}{*}1 {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1 {ü}{{\:u}}1,
   breaklines=true, 
   basicstyle=\ttfamily, 
   columns=fullflexible, 
   keepspaces=true, 
   showstringspaces=false,
+  upquote=true,
 }
 
 \renewcommand{\familydefault}{\sfdefault}
 \usepackage[scaled=1]{helvet}
-

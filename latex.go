@@ -25,7 +25,8 @@ type Config struct {
 	// Replace the default preamble by setting this to a non-nil byte slice.
 	// Should NOT end with \begin{document}, this is added automatically.
 	Preamble []byte
-	// If set renderer will render possibly unsafe elements, such as links.
+	// If set renderer will render possibly unsafe elements, such as links and
+	// code block raw content.
 	Unsafe bool
 	// Declares all used unicode characters in the preamble
 	// and replaces them with the result of this function.
@@ -170,7 +171,7 @@ func (r *Renderer) renderCodeBlock(w util.BufWriter, source []byte, n ast.Node, 
 	if entering {
 		_, _ = w.Write(blockCodeStart)
 		_ = w.WriteByte('\n')
-		r.writeLines(w, source, n)
+		r.writeRawLines(w, source, n)
 	} else {
 		_, _ = w.Write(blockCodeEnd)
 	}
@@ -190,7 +191,7 @@ func (r *Renderer) renderFencedCodeBlock(w util.BufWriter, source []byte, node a
 			_ = w.WriteByte(']')
 		}
 		_ = w.WriteByte('\n')
-		r.writeLines(w, source, n)
+		r.writeRawLines(w, source, n)
 	} else {
 		_, _ = w.Write(blockCodeEnd)
 	}
@@ -198,7 +199,7 @@ func (r *Renderer) renderFencedCodeBlock(w util.BufWriter, source []byte, node a
 }
 
 func (r *Renderer) renderHTMLBlock(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
-	w.WriteString("\n% HTML block rendering unsupported, skipped\n")
+	w.WriteString("\n% goldmark-latex: HTML block rendering unsupported, skipped\n")
 	return ast.WalkSkipChildren, nil
 }
 
@@ -209,7 +210,7 @@ func (r *Renderer) renderList(w util.BufWriter, source []byte, node ast.Node, en
 		tag = "enumerate"
 	}
 	if entering {
-		_, _ = w.WriteString("\\begin{")
+		_, _ = w.WriteString("\n\\begin{")
 		_, _ = w.WriteString(tag)
 		_, _ = w.WriteString("}\n")
 	} else {
@@ -270,12 +271,12 @@ func (r *Renderer) renderAutoLink(w util.BufWriter, source []byte, node ast.Node
 	}
 	url := n.URL(source)
 	label := n.Label(source)
-	_, _ = w.WriteString(`\href{`)
+	_, _ = w.WriteString("\\href{")
 	if n.AutoLinkType == ast.AutoLinkEmail && haslowerprefix(url, mailToPrefix) {
 		_, _ = w.WriteString("mailto:")
 	}
 	escLink(w, url)
-	_, _ = w.WriteString(`}{`)
+	_, _ = w.WriteString("}{")
 	escapeLaTeX(w, label)
 	_ = w.WriteByte('}')
 	return ast.WalkContinue, nil
@@ -357,13 +358,13 @@ func (r *Renderer) renderLink(w util.BufWriter, source []byte, node ast.Node, en
 
 func (r *Renderer) renderImage(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	// No image rendering implemented yet.
-	w.WriteString("\n% image rendering unsupported as of yet\n")
+	w.WriteString("\n% goldmark-latex: image rendering unsupported as of yet\n")
 	return ast.WalkSkipChildren, nil
 }
 
 func (r *Renderer) renderRawHTML(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	// No rawHTML rendering supported
-	w.WriteString("\n% raw HTML rendering unsupported\n")
+	w.WriteString("\n% goldmark-latex: raw HTML rendering unsupported\n")
 	return ast.WalkSkipChildren, nil
 }
 
@@ -408,6 +409,20 @@ func (r *Renderer) writeLines(w util.BufWriter, source []byte, n ast.Node) {
 	}
 }
 
+func (r *Renderer) writeRawLines(w util.BufWriter, source []byte, n ast.Node) {
+	l := n.Lines().Len()
+	for i := 0; i < l; i++ {
+		line := n.Lines().At(i)
+		text := line.Value(source)
+		if r.Config.Unsafe || !bytes.Contains(text, endCmdPrefix) {
+			_, _ = w.Write(text)
+		} else {
+			_, _ = w.WriteString("% goldmark-latex: Skipped following line due to possibly unsafe content:\n%")
+			_, _ = w.Write(text)
+		}
+	}
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -430,6 +445,7 @@ func bool2int(b bool) int {
 }
 
 var (
+	endCmdPrefix    = []byte("\\end")
 	mailToPrefix    = []byte(":mailto")
 	hardBreak       = []byte("\\\\\n\n")
 	strikeStart     = []byte("\\sout{") // Using ulem package.
