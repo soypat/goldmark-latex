@@ -96,47 +96,48 @@ func (r *Renderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 }
 
 func (r *Renderer) renderDocument(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
-	if entering {
-		if r.Config.Preamble == nil {
-			w.Write(defaultHeader)
-		} else {
-			w.Write(r.Config.Preamble)
-		}
-		if r.Config.DeclareUnicode != nil {
-			_ = w.WriteByte('\n')
-			const unicodeDecl = "\\DeclareUnicodeCharacter{"
-			const zeropad = "00"
-			declared := make(map[rune]struct{})
-			n := len(source)
-			i := 0
-			for i < n {
-				char, lchar := utf8.DecodeRune(source[i:])
-				i += lchar
-				if lchar == 1 {
-					continue // ASCII character.
-				}
-				if _, ok := declared[char]; ok {
-					continue
-				}
-				declared[char] = struct{}{}
-				replace, ok := r.Config.DeclareUnicode(char)
-				if !ok {
-					continue
-				}
-				_, _ = w.WriteString(unicodeDecl)
-				num := strconv.FormatUint(uint64(char), 16)
-				_, _ = w.WriteString(zeropad[:2-(len(num)-2)])
-				_, _ = w.WriteString(num)
-				_, _ = w.WriteString("}{")
-				_, _ = w.WriteString(replace)
-				_, _ = w.WriteString("}\n")
-			}
-		}
-		w.WriteString("\n\\begin{document}\n")
-	} else {
+	if !entering {
+		// End of program.
 		w.WriteString("\n\\end{document}\n")
 		return ast.WalkStop, nil
 	}
+
+	if r.Config.Preamble == nil {
+		w.Write(defaultHeader)
+	} else {
+		w.Write(r.Config.Preamble)
+	}
+	if r.Config.DeclareUnicode != nil {
+		_ = w.WriteByte('\n')
+		const unicodeDecl = "\\DeclareUnicodeCharacter{"
+		const zeropad = "00"
+		declared := make(map[rune]struct{})
+		n := len(source)
+		i := 0
+		for i < n {
+			char, lchar := utf8.DecodeRune(source[i:])
+			i += lchar
+			if lchar == 1 {
+				continue // ASCII character.
+			}
+			if _, ok := declared[char]; ok {
+				continue
+			}
+			declared[char] = struct{}{}
+			replace, ok := r.Config.DeclareUnicode(char)
+			if !ok {
+				continue
+			}
+			_, _ = w.WriteString(unicodeDecl)
+			num := strconv.FormatUint(uint64(char), 16)
+			_, _ = w.WriteString(zeropad[:2-(len(num)-2)])
+			_, _ = w.WriteString(num)
+			_, _ = w.WriteString("}{")
+			_, _ = w.WriteString(replace)
+			_, _ = w.WriteString("}\n")
+		}
+	}
+	w.WriteString("\n\\begin{document}\n")
 	return ast.WalkContinue, nil
 }
 
@@ -455,11 +456,6 @@ var (
 	}
 )
 
-var supportedLang = map[string]struct{}{
-	"python": {},
-	// "markdown": {}, // Breaks lstlisting
-}
-
 var escapeTable = [256][]byte{
 	'\\': []byte("\\textbackslash~"),
 	'~':  []byte("\\textasciitilde~"),
@@ -491,4 +487,118 @@ func escapeLaTeX(w io.Writer, s []byte) {
 
 func escLink(w io.Writer, text []byte) {
 	escapeLaTeX(w, text)
+}
+
+// Languages supported by lstlisting.
+// Generated with the following program with http://mirrors.ctan.org/macros/latex/contrib/listings/lstdrvrs.dtx.
+//
+//	r := strings.NewReader(a)
+//	scan := bufio.NewScanner(r)
+//	re := regexp.MustCompile(`\{[A-Za-z0-9]*\}`)
+//	found := make(map[string]bool)
+//	for scan.Scan() {
+//		line := scan.Text()
+//		a := strings.LastIndex("{", line)
+//		if a > 1 {
+//			line = line[a-1:]
+//		}
+//		got := re.FindString(line)
+//		if len(got) > 2 {
+//			lang := strings.ToLower(got[1 : len(got)-1])
+//			if !found[lang] {
+//				fmt.Printf("\"%s\":{},\n", lang)
+//				found[lang] = true
+//			}
+//		}
+//	}
+var supportedLang = map[string]struct{}{
+	"abap":        {},
+	"acm":         {},
+	"acmscript":   {},
+	"acsl":        {},
+	"ada":         {},
+	"algol":       {},
+	"assembler":   {},
+	"awk":         {},
+	"basic":       {},
+	"clean":       {},
+	"idl":         {},
+	"c":           {},
+	"caml":        {},
+	"cil":         {},
+	"cobol":       {},
+	"comsol":      {},
+	"csh":         {},
+	"bash":        {},
+	"sh":          {},
+	"delphi":      {},
+	"eiffel":      {},
+	"elan":        {},
+	"erlang":      {},
+	"euphoria":    {},
+	"fortran":     {},
+	"gap":         {},
+	"go":          {},
+	"gcl":         {},
+	"gnuplot":     {},
+	"hansl":       {},
+	"haskell":     {},
+	"html":        {},
+	"inform":      {},
+	"java":        {},
+	"jvmis":       {},
+	"scala":       {},
+	"ksh":         {},
+	"lingo":       {},
+	"lisp":        {},
+	"elisp":       {},
+	"llvm":        {},
+	"logo":        {},
+	"lua":         {},
+	"make":        {},
+	"matlab":      {},
+	"mathematica": {},
+	"mercury":     {},
+	"metapost":    {},
+	"miranda":     {},
+	"mizar":       {},
+	"ml":          {},
+	"mupad":       {},
+	"nastran":     {},
+	"ocl":         {},
+	"octave":      {},
+	"oz":          {},
+	"pascal":      {},
+	"perl":        {},
+	"php":         {},
+	"plasm":       {},
+	"postscript":  {},
+	"pov":         {},
+	"prolog":      {},
+	"promela":     {},
+	"pstricks":    {},
+	"python":      {},
+	"rexx":        {},
+	"oorexx":      {},
+	"reduce":      {},
+	"rsl":         {},
+	"ruby":        {},
+	"scilab":      {},
+	"shelxl":      {},
+	"simula":      {},
+	"sparql":      {},
+	"sql":         {},
+	"swift":       {},
+	"tcl":         {},
+	"s":           {},
+	"r":           {},
+	"sas":         {},
+	"tex":         {},
+	"vbscript":    {},
+	"verilog":     {},
+	"vhdl":        {},
+	"vrml":        {},
+	"xslt":        {},
+	"ant":         {},
+	"xml":         {},
 }
