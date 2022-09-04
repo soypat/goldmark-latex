@@ -13,3 +13,19 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+
+# Output files from tests.
+*_test.md
+*_test.tex
+*.dvi
+*.pdf
+*.log
+*.fls
+*latexmk
+*.aux
+testresult
+*_bin
+
+# IDE
+.vscode
