@@ -157,13 +157,14 @@ func (r *Renderer) renderHeading(w util.BufWriter, source []byte, node ast.Node,
 	if entering {
 		headingLevel := max(0, min(6, r.Config.HeadingLevelOffset+n.Level-1))
 		start := headingTable[headingLevel][bool2int(r.Config.NoHeadingNumbering)]
-		w.WriteByte('\n')
-		w.Write(start)
+		_ = w.WriteByte('\n')
+		_, _ = w.Write(start)
 		if headingLevel >= 5 {
+			// _, _ = w.Write(softBreak)
 			w.WriteByte('\n')
 		}
 	} else {
-		w.WriteByte('}')
+		_ = w.WriteByte('}')
 	}
 	return ast.WalkContinue, nil
 }
@@ -392,6 +393,7 @@ func (r *Renderer) renderText(w util.BufWriter, source []byte, node ast.Node, en
 		if n.HardLineBreak() {
 			_, _ = w.Write(hardBreak)
 		} else if n.SoftLineBreak() {
+			// _, _ = w.Write(softBreak)
 			_ = w.WriteByte('\n')
 		}
 	}
@@ -458,11 +460,12 @@ var (
 	endCmdPrefix    = []byte("\\end")
 	mailToPrefix    = []byte(":mailto")
 	hardBreak       = []byte("\\\\\n\n")
+	softBreak       = []byte("\n\n")
 	strikeStart     = []byte("\\sout{") // Using ulem package.
 	hrefStart       = []byte("\\href{")
 	codeSpanStart   = []byte("\\texttt{")
-	blockQuoteStart = []byte("\n\\begin{lstlisting}[frame=none]\n")
-	blockQuoteEnd   = []byte("\\end{lstlisting}\n")
+	blockQuoteStart = []byte("\n\\begin{framed}\n\\begin{quote}\n")
+	blockQuoteEnd   = []byte("\\end{quote}\n\\end{framed}\n")
 	blockCodeStart  = []byte("\n\\begin{lstlisting}")
 	blockCodeEnd    = []byte("\\end{lstlisting}\n")
 	hruleCommand    = []byte("\n\\hrulefill\n")
