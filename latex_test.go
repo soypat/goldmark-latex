@@ -19,21 +19,39 @@ var _ renderer.NodeRenderer = &latex.Renderer{} // Compile time check of interfa
 var data []byte
 
 func TestRenderer(t *testing.T) {
-	lr := latex.NewRenderer(latex.Config{
-		Unsafe: true,
-	})
-	r := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(lr, 1000)))
-	md := goldmark.New(goldmark.WithRenderer(r))
-	var output bytes.Buffer
-	err := md.Convert(data, &output)
-	if err != nil {
-		t.Error(err)
-	}
 	os.Mkdir("testresult", 0777)
 	fp, err := os.Create("testresult/result_test.tex")
 	if err != nil {
 		t.Fatal(err)
 	}
+	output := render(t, bytes.NewBuffer(data))
 	defer fp.Close()
-	io.Copy(fp, &output)
+	io.Copy(fp, output)
+}
+
+func render(t *testing.T, markdown io.Reader) *bytes.Buffer {
+	r := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(latex.NewRenderer(latex.Config{
+		NoHeadingNumbering: true,                                                                     // No heading numbers
+		Preamble:           append(latex.DefaultPreamble(), []byte("\n\\usepackage{MnSymbol}\n")...), // add star symbols to preamble.
+		DeclareUnicode: func(r rune) (raw string, isReplaced bool) {
+			switch r {
+			case '★':
+				return `$\filledstar$`, true
+			case '☆':
+				return `$\smallstar$`, true
+			}
+			return "", false
+		},
+	}), 1000)))
+	md := goldmark.New(goldmark.WithRenderer(r))
+	var output, input bytes.Buffer
+	_, err := io.Copy(&input, markdown)
+	if err != nil {
+		t.Error(err)
+	}
+	err = md.Convert(input.Bytes(), &output)
+	if err != nil {
+		t.Error(err)
+	}
+	return &output
 }

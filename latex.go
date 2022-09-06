@@ -253,6 +253,8 @@ func (r *Renderer) renderParagraph(w util.BufWriter, source []byte, n ast.Node, 
 		pkind := parent.Kind()
 		if pkind != ast.KindList && pkind != ast.KindListItem {
 			_, _ = w.Write(hardBreak)
+		} else {
+			_, _ = w.WriteString("\n\n")
 		}
 	}
 	return ast.WalkContinue, nil
