@@ -18,17 +18,23 @@ import (
 )
 
 var (
-	usehtml        bool
-	print          bool
-	unhead         bool
-	outputFilename string
+	usehtml          bool
+	print            bool
+	unhead           bool
+	unsafe           bool
+	preambleFilename string
+	outputFilename   string
+	headingOffset    int
 )
 
 func main() {
 	flag.BoolVar(&usehtml, "html", false, "Output html")
 	flag.BoolVar(&print, "p", false, "Output to stdout")
+	flag.BoolVar(&unsafe, "unsafe", false, "Render unsafe segments of document such as links or verbatim.")
 	flag.BoolVar(&unhead, "unhead", false, "No heading numbering")
 	flag.StringVar(&outputFilename, "o", "", "Output filename. By default just adds .tex to input filename.")
+	flag.StringVar(&preambleFilename, "preamble", "", "Preamble filename. If not set uses a default preamble.")
+	flag.IntVar(&headingOffset, "headingoffset", 0, "Section heading offset. Can be negative. Results are clipped between 1 and 6.")
 	flag.Parse()
 	args := flag.Args()
 	err := run(args)
@@ -42,12 +48,10 @@ func run(args []string) error {
 		return errors.New("missing filename argument")
 	}
 	filename := args[0]
-	fp, err := os.Open(filename)
+	input, err := readFile(filename)
 	if err != nil {
 		return err
 	}
-	input, err := io.ReadAll(fp)
-	fp.Close()
 	if err != nil {
 		return err
 	}
@@ -76,16 +80,40 @@ func run(args []string) error {
 }
 
 func renderGoldmark(input []byte) ([]byte, error) {
+	var preamble []byte
+	if preambleFilename != "" {
+		b, err := readFile(preambleFilename)
+		if err != nil {
+			return nil, err
+		}
+		preamble = b
+	}
 	var rd renderer.Renderer
 	if usehtml {
 		rd = goldmark.DefaultRenderer()
 	} else {
 		rd = renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(latex.NewRenderer(latex.Config{
 			NoHeadingNumbering: unhead,
+			Unsafe:             unsafe,
+			Preamble:           preamble,
+			HeadingLevelOffset: headingOffset,
 		}), 1000)))
 	}
 	md := goldmark.New(goldmark.WithRenderer(rd))
 	var b bytes.Buffer
 	err := md.Convert(input, &b)
 	return b.Bytes(), err
+}
+
+// Opens, reads and closes file and returns contents.
+func readFile(filename string) ([]byte, error) {
+	fp, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	input, err := io.ReadAll(fp)
+	if err != nil {
+		return nil, err
+	}
+	return input, fp.Close()
 }
