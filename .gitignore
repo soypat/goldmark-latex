@@ -26,6 +26,6 @@
 *.aux
 testresult
 *_bin
-
+_data.tex
 # IDE
 .vscode
