@@ -1,5 +1,5 @@
 # goldmark-latex
-A LaTeX renderer for Goldmark. Produce `.tex` files from markdown.
+A LaTeX renderer for [Goldmark](https://github.com/yuin/goldmark). Produce `.tex` files from markdown.
 
 This renderer seeks to be as extensible as Goldmark itself. Please file an issue if it does not meet your requirements.
 
