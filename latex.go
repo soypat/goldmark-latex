@@ -164,7 +164,7 @@ func (r *Renderer) renderHeading(w util.BufWriter, source []byte, node ast.Node,
 			w.WriteByte('\n')
 		}
 	} else {
-		_ = w.WriteByte('}')
+		_, _ = w.WriteString("}\n")
 	}
 	return ast.WalkContinue, nil
 }
