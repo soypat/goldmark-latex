@@ -27,5 +27,6 @@
 testresult
 *_bin
 _data.tex
+*.gz
 # IDE
 .vscode

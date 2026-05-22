@@ -27,6 +27,7 @@ var (
 	preambleFilename string
 	outputFilename   string
 	headingOffset    int
+	noPreamble       bool
 )
 
 func main() {
@@ -36,6 +37,7 @@ func main() {
 	flag.BoolVar(&unsafe, "unsafe", false, "Render unsafe segments of document such as links or verbatim.")
 	flag.BoolVar(&unhead, "unhead", false, "No section numbering")
 	flag.StringVar(&outputFilename, "o", "", "Output filename. By default just adds .tex to input filename.")
+	flag.BoolVar(&noPreamble, "nopreamble", false, "Forcibly omits preamble and \\begin{document} and \\end{document} statements.")
 	flag.StringVar(&preambleFilename, "preamble", "", "Preamble filename. If not set uses a default preamble.")
 	flag.IntVar(&headingOffset, "headingoffset", 0, "Section heading offset. Can be negative. Results are clipped between 1 and 6.")
 	flag.Parse()
@@ -53,9 +55,6 @@ func run(args []string) error {
 	verb("beginning verbose run")
 	filename := args[0]
 	input, err := readFile(filename)
-	if err != nil {
-		return err
-	}
 	if err != nil {
 		return err
 	}
@@ -103,6 +102,7 @@ func renderGoldmark(input []byte) ([]byte, error) {
 			Unsafe:             unsafe,
 			Preamble:           preamble,
 			HeadingLevelOffset: headingOffset,
+			NoPreamble:         noPreamble,
 		}), 1000)))
 	}
 	md := goldmark.New(goldmark.WithRenderer(rd))

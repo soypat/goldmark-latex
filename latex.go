@@ -31,6 +31,8 @@ type Config struct {
 	// Declares all used unicode characters in the preamble
 	// and replaces them with the result of this function.
 	DeclareUnicode func(rune) (raw string, isReplaced bool)
+	// Omits printing of preamble and \begin{document} and \end{document} statements
+	NoPreamble bool
 }
 
 // SetLatexOption implements the Option interface.
@@ -96,8 +98,12 @@ func (r *Renderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 func (r *Renderer) renderDocument(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	if !entering {
 		// End of program.
-		w.WriteString("\n\\end{document}\n")
+		if !r.Config.NoPreamble {
+			w.WriteString("\n\\end{document}\n")
+		}
 		return ast.WalkStop, nil
+	} else if r.Config.NoPreamble {
+		return ast.WalkContinue, nil
 	}
 
 	if r.Config.Preamble == nil {
@@ -105,6 +111,7 @@ func (r *Renderer) renderDocument(w util.BufWriter, source []byte, node ast.Node
 	} else {
 		w.Write(r.Config.Preamble)
 	}
+
 	if r.Config.DeclareUnicode != nil {
 		_ = w.WriteByte('\n')
 		const unicodeDecl = "\\DeclareUnicodeCharacter{"
