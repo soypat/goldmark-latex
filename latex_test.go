@@ -61,6 +61,40 @@ a & b & c \\
 	}
 }
 
+func TestTableCaptionRendering(t *testing.T) {
+	const input = "| A | B |\n| - | - |\n| 1 | 2 |\n\n: My caption\n"
+	const want = `\begin{table}[h!]
+\centering
+\begin{tabular}{ll}
+\hline
+A & B \\
+\hline
+1 & 2 \\
+\hline
+\end{tabular}
+\caption{My caption}
+\end{table}`
+
+	lr := latex.NewRenderer(latex.Config{NoPreamble: true, EnableTableCaptions: true})
+	rd := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(lr, 1000)))
+	md := goldmark.New(
+		goldmark.WithRenderer(rd),
+		goldmark.WithParserOptions(
+			parser.WithParagraphTransformers(util.Prioritized(extension.NewTableParagraphTransformer(), 200)),
+			parser.WithASTTransformers(util.Prioritized(extension.NewTableASTTransformer(), 0)),
+			parser.WithASTTransformers(util.Prioritized(latex.TableCaptionTransformer, -1)),
+		),
+	)
+	var out bytes.Buffer
+	if err := md.Convert([]byte(input), &out); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.TrimSpace(out.String())
+	if got != want {
+		t.Errorf("caption output mismatch\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 func render(t *testing.T, markdown io.Reader) *bytes.Buffer {
 	r := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(latex.NewRenderer(latex.Config{
 		NoHeadingNumbering: true,                                                                     // No heading numbers

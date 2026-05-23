@@ -26,6 +26,7 @@ var (
 	print            bool
 	unhead           bool
 	unsafe           bool
+	tableCaptions    bool
 	preambleFilename string
 	outputFilename   string
 	headingOffset    int
@@ -40,6 +41,7 @@ func main() {
 	flag.BoolVar(&unhead, "unhead", false, "No section numbering")
 	flag.StringVar(&outputFilename, "o", "", "Output filename. By default just adds .tex to input filename.")
 	flag.BoolVar(&noPreamble, "nopreamble", false, "Forcibly omits preamble and \\begin{document} and \\end{document} statements.")
+	flag.BoolVar(&tableCaptions, "tablecaptions", false, "Enable table captions via ': caption text' paragraph after a table.")
 	flag.StringVar(&preambleFilename, "preamble", "", "Preamble filename. If not set uses a default preamble.")
 	flag.IntVar(&headingOffset, "headingoffset", 0, "Section heading offset. Can be negative. Results are clipped between 1 and 6.")
 	flag.Parse()
@@ -100,19 +102,24 @@ func renderGoldmark(input []byte) ([]byte, error) {
 		rd = goldmark.DefaultRenderer()
 	} else {
 		rd = renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(latex.NewRenderer(latex.Config{
-			NoHeadingNumbering: unhead,
-			Unsafe:             unsafe,
-			Preamble:           preamble,
-			HeadingLevelOffset: headingOffset,
-			NoPreamble:         noPreamble,
+			NoHeadingNumbering:  unhead,
+			Unsafe:              unsafe,
+			Preamble:            preamble,
+			HeadingLevelOffset:  headingOffset,
+			NoPreamble:          noPreamble,
+			EnableTableCaptions: tableCaptions,
 		}), 1000)))
+	}
+	parserOpts := []parser.Option{
+		parser.WithParagraphTransformers(util.Prioritized(extension.NewTableParagraphTransformer(), 200)),
+		parser.WithASTTransformers(util.Prioritized(extension.NewTableASTTransformer(), 0)),
+	}
+	if tableCaptions {
+		parserOpts = append(parserOpts, parser.WithASTTransformers(util.Prioritized(latex.TableCaptionTransformer, -1)))
 	}
 	md := goldmark.New(
 		goldmark.WithRenderer(rd),
-		goldmark.WithParserOptions(
-			parser.WithParagraphTransformers(util.Prioritized(extension.NewTableParagraphTransformer(), 200)),
-			parser.WithASTTransformers(util.Prioritized(extension.NewTableASTTransformer(), 0)),
-		),
+		goldmark.WithParserOptions(parserOpts...),
 	)
 	var b bytes.Buffer
 	verb("start rendering using goldmark")

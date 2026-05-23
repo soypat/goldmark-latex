@@ -10,8 +10,10 @@ import (
 
 	"github.com/yuin/goldmark/ast"
 	extast "github.com/yuin/goldmark/extension/ast"
+	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
 )
 
@@ -34,6 +36,8 @@ type Config struct {
 	DeclareUnicode func(rune) (raw string, isReplaced bool)
 	// Omits printing of preamble and \begin{document} and \end{document} statements
 	NoPreamble bool
+	// Enables Quarto-like table captions. Define a table caption by adding a colon prefixed caption below the table.
+	EnableTableCaptions bool
 }
 
 // SetLatexOption implements the Option interface.
@@ -48,6 +52,53 @@ type Renderer struct {
 // An Option interface sets options for HTML based renderers.
 type Option interface {
 	SetLatexOption(*Config)
+}
+
+// TableCaption is an AST node for a Pandoc-style table caption (`: text` paragraph after a table).
+type TableCaption struct{ ast.BaseBlock }
+
+// KindTableCaption is the NodeKind for TableCaption nodes.
+var KindTableCaption = ast.NewNodeKind("TableCaption")
+
+func (n *TableCaption) Kind() ast.NodeKind { return KindTableCaption }
+func (n *TableCaption) Dump(source []byte, level int) {
+	ast.DumpHelper(n, source, level, nil, nil)
+}
+
+// TableCaptionTransformer is a parser.ASTTransformer that converts a `: caption`
+// paragraph immediately following a table into a TableCaption node.
+// Register it with priority < 0 so it runs after goldmark's table transformer (priority 0).
+var TableCaptionTransformer parser.ASTTransformer = &tableCaptionTransformer{}
+
+type tableCaptionTransformer struct{}
+
+func (t *tableCaptionTransformer) Transform(node *ast.Document, reader text.Reader, pc parser.Context) {
+	ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering || n.Kind() != ast.KindParagraph {
+			return ast.WalkContinue, nil
+		}
+		prev := n.PreviousSibling()
+		if prev == nil || prev.Kind() != extast.KindTable {
+			return ast.WalkContinue, nil
+		}
+		firstChild := n.FirstChild()
+		if firstChild == nil || firstChild.Kind() != ast.KindText {
+			return ast.WalkContinue, nil
+		}
+		seg := firstChild.(*ast.Text).Segment
+		if !bytes.HasPrefix(seg.Value(reader.Source()), []byte(": ")) {
+			return ast.WalkContinue, nil
+		}
+		firstChild.(*ast.Text).Segment = seg.WithStart(seg.Start + 2)
+		caption := &TableCaption{}
+		for c := n.FirstChild(); c != nil; {
+			next := c.NextSibling()
+			caption.AppendChild(caption, c)
+			c = next
+		}
+		n.Parent().ReplaceChild(n.Parent(), n, caption)
+		return ast.WalkContinue, nil
+	})
 }
 
 // NewRenderer returns a new Renderer with given options.
@@ -86,6 +137,7 @@ func (r *Renderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(ast.KindThematicBreak, r.renderThematicBreak)
 
 	// tables (GFM extension)
+	reg.Register(KindTableCaption, r.renderTableCaption)
 	reg.Register(extast.KindTable, r.renderTable)
 	reg.Register(extast.KindTableHeader, r.renderTableHeader)
 	reg.Register(extast.KindTableRow, r.renderTableRow)
@@ -293,8 +345,12 @@ func (r *Renderer) renderThematicBreak(w util.BufWriter, source []byte, n ast.No
 
 func (r *Renderer) renderTable(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	n := node.(*extast.Table)
+	hasCaption := r.Config.EnableTableCaptions && node.NextSibling() != nil && node.NextSibling().Kind() == KindTableCaption
 	if entering {
-		_, _ = w.WriteString("\n\\begin{tabular}{")
+		if hasCaption {
+			_, _ = w.WriteString("\n\\begin{table}[h!]\n\\centering\n")
+		}
+		_, _ = w.WriteString("\\begin{tabular}{")
 		for _, align := range n.Alignments {
 			switch align {
 			case extast.AlignRight:
@@ -308,6 +364,18 @@ func (r *Renderer) renderTable(w util.BufWriter, source []byte, node ast.Node, e
 		_, _ = w.WriteString("}\n\\hline\n")
 	} else {
 		_, _ = w.WriteString("\\hline\n\\end{tabular}\n")
+	}
+	return ast.WalkContinue, nil
+}
+
+func (r *Renderer) renderTableCaption(w util.BufWriter, source []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
+	if !r.Config.EnableTableCaptions {
+		return ast.WalkSkipChildren, nil
+	}
+	if entering {
+		_, _ = w.WriteString("\\caption{")
+	} else {
+		_, _ = w.WriteString("}\n\\end{table}\n")
 	}
 	return ast.WalkContinue, nil
 }
