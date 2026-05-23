@@ -5,10 +5,13 @@ import (
 	_ "embed"
 	"io"
 	"os"
+	"strings"
 	"testing"
 
 	latex "github.com/soypat/goldmark-latex"
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/util"
 )
@@ -27,6 +30,35 @@ func TestRenderer(t *testing.T) {
 	output := render(t, bytes.NewBuffer(data))
 	defer fp.Close()
 	io.Copy(fp, output)
+}
+
+func TestTableRendering(t *testing.T) {
+	const input = "| Left | Center | Right |\n| :--- | :----: | ----: |\n| a    | b      | c     |\n"
+	const want = `\begin{tabular}{lcr}
+\hline
+Left & Center & Right \\
+\hline
+a & b & c \\
+\hline
+\end{tabular}`
+
+	lr := latex.NewRenderer(latex.Config{NoPreamble: true})
+	rd := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(lr, 1000)))
+	md := goldmark.New(
+		goldmark.WithRenderer(rd),
+		goldmark.WithParserOptions(
+			parser.WithParagraphTransformers(util.Prioritized(extension.NewTableParagraphTransformer(), 200)),
+			parser.WithASTTransformers(util.Prioritized(extension.NewTableASTTransformer(), 0)),
+		),
+	)
+	var out bytes.Buffer
+	if err := md.Convert([]byte(input), &out); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.TrimSpace(out.String())
+	if got != want {
+		t.Errorf("table output mismatch\ngot:\n%s\nwant:\n%s", got, want)
+	}
 }
 
 func render(t *testing.T, markdown io.Reader) *bytes.Buffer {

@@ -14,6 +14,8 @@ import (
 
 	latex "github.com/soypat/goldmark-latex"
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/util"
 )
@@ -105,7 +107,13 @@ func renderGoldmark(input []byte) ([]byte, error) {
 			NoPreamble:         noPreamble,
 		}), 1000)))
 	}
-	md := goldmark.New(goldmark.WithRenderer(rd))
+	md := goldmark.New(
+		goldmark.WithRenderer(rd),
+		goldmark.WithParserOptions(
+			parser.WithParagraphTransformers(util.Prioritized(extension.NewTableParagraphTransformer(), 200)),
+			parser.WithASTTransformers(util.Prioritized(extension.NewTableASTTransformer(), 0)),
+		),
+	)
 	var b bytes.Buffer
 	verb("start rendering using goldmark")
 	start := time.Now()

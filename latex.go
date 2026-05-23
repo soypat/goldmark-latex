@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/yuin/goldmark/ast"
+	extast "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/util"
@@ -83,6 +84,12 @@ func (r *Renderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(ast.KindParagraph, r.renderParagraph)
 	reg.Register(ast.KindTextBlock, r.renderTextBlock)
 	reg.Register(ast.KindThematicBreak, r.renderThematicBreak)
+
+	// tables (GFM extension)
+	reg.Register(extast.KindTable, r.renderTable)
+	reg.Register(extast.KindTableHeader, r.renderTableHeader)
+	reg.Register(extast.KindTableRow, r.renderTableRow)
+	reg.Register(extast.KindTableCell, r.renderTableCell)
 
 	// inlines
 	reg.Register(ast.KindAutoLink, r.renderAutoLink)
@@ -280,6 +287,48 @@ func (r *Renderer) renderThematicBreak(w util.BufWriter, source []byte, n ast.No
 	if entering {
 		_, _ = w.Write(hruleCommand)
 		_ = w.WriteByte('\n')
+	}
+	return ast.WalkContinue, nil
+}
+
+func (r *Renderer) renderTable(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	n := node.(*extast.Table)
+	if entering {
+		_, _ = w.WriteString("\n\\begin{tabular}{")
+		for _, align := range n.Alignments {
+			switch align {
+			case extast.AlignRight:
+				_ = w.WriteByte('r')
+			case extast.AlignCenter:
+				_ = w.WriteByte('c')
+			default:
+				_ = w.WriteByte('l')
+			}
+		}
+		_, _ = w.WriteString("}\n\\hline\n")
+	} else {
+		_, _ = w.WriteString("\\hline\n\\end{tabular}\n")
+	}
+	return ast.WalkContinue, nil
+}
+
+func (r *Renderer) renderTableHeader(w util.BufWriter, source []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
+	if !entering {
+		_, _ = w.WriteString(" \\\\\n\\hline\n")
+	}
+	return ast.WalkContinue, nil
+}
+
+func (r *Renderer) renderTableRow(w util.BufWriter, source []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
+	if !entering {
+		_, _ = w.WriteString(" \\\\\n")
+	}
+	return ast.WalkContinue, nil
+}
+
+func (r *Renderer) renderTableCell(w util.BufWriter, source []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
+	if entering && n.PreviousSibling() != nil {
+		_, _ = w.WriteString(" & ")
 	}
 	return ast.WalkContinue, nil
 }
