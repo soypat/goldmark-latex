@@ -95,6 +95,64 @@ A & B \\
 	}
 }
 
+// renderCite returns the LaTeX output for input using cfg, with the citation
+// inline parser registered. Once the parser is implemented, citations in input
+// will be converted; until then [@key] renders as plain text and these tests fail.
+func renderCite(t *testing.T, cfg latex.Config, input string) string {
+	t.Helper()
+	lr := latex.NewRenderer(cfg)
+	rd := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(lr, 1000)))
+	md := goldmark.New(
+		goldmark.WithRenderer(rd),
+		goldmark.WithParserOptions(
+			parser.WithInlineParsers(util.Prioritized(latex.CitationParser, 999)),
+		),
+	)
+	var out bytes.Buffer
+	if err := md.Convert([]byte(input), &out); err != nil {
+		t.Fatal(err)
+	}
+	return out.String()
+}
+
+func TestCitationSingle(t *testing.T) {
+	got := strings.TrimSpace(renderCite(t, latex.Config{NoPreamble: true}, "See [@darwin1859]."))
+	want := `See \cite{darwin1859}.`
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestCitationMultipleKeys(t *testing.T) {
+	got := strings.TrimSpace(renderCite(t, latex.Config{NoPreamble: true}, "[@key1; @key2]"))
+	want := `\cite{key1,key2}`
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestCitationCustomCmd(t *testing.T) {
+	got := strings.TrimSpace(renderCite(t, latex.Config{NoPreamble: true, CiteCmd: "citep"}, "[@key]"))
+	want := `\citep{key}`
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestBibliography(t *testing.T) {
+	got := renderCite(t, latex.Config{BibFile: "refs"}, "text")
+	if !strings.Contains(got, "\\bibliographystyle{plain}\n\\bibliography{refs}") {
+		t.Errorf("bibliography block missing or malformed:\n%s", got)
+	}
+}
+
+func TestBibliographyCustomStyle(t *testing.T) {
+	got := renderCite(t, latex.Config{BibFile: "refs", BibStyle: "ieeetr"}, "text")
+	if !strings.Contains(got, "\\bibliographystyle{ieeetr}\n\\bibliography{refs}") {
+		t.Errorf("bibliography block missing or malformed:\n%s", got)
+	}
+}
+
 func render(t *testing.T, markdown io.Reader) *bytes.Buffer {
 	r := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(latex.NewRenderer(latex.Config{
 		NoHeadingNumbering: true,                                                                     // No heading numbers

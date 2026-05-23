@@ -38,6 +38,14 @@ type Config struct {
 	NoPreamble bool
 	// Enables Quarto-like table captions. Define a table caption by adding a colon prefixed caption below the table.
 	EnableTableCaptions bool
+	// BibFile is the path to the .bib file passed to \bibliography{}.
+	// When non-empty, \bibliographystyle{BibStyle}\bibliography{BibFile} is emitted before \end{document}.
+	BibFile string
+	// BibStyle is the argument to \bibliographystyle{}. Defaults to "plain" when BibFile is set.
+	BibStyle string
+	// CiteCmd is the LaTeX command used for citations, e.g. "cite", "citep", "parencite".
+	// Defaults to "cite".
+	CiteCmd string
 }
 
 // SetLatexOption implements the Option interface.
@@ -63,6 +71,60 @@ var KindTableCaption = ast.NewNodeKind("TableCaption")
 func (n *TableCaption) Kind() ast.NodeKind { return KindTableCaption }
 func (n *TableCaption) Dump(source []byte, level int) {
 	ast.DumpHelper(n, source, level, nil, nil)
+}
+
+// Citation is an inline AST node representing one or more Pandoc-style citations.
+// Syntax: [@key] or [@key1; @key2] — maps to \cite{key} or \cite{key1,key2}.
+type Citation struct {
+	ast.BaseInline
+	// Keys holds the extracted citation keys, e.g. ["key1", "key2"].
+	Keys [][]byte
+}
+
+// KindCitation is the NodeKind for Citation nodes.
+var KindCitation = ast.NewNodeKind("Citation")
+
+func (n *Citation) Kind() ast.NodeKind { return KindCitation }
+func (n *Citation) Dump(source []byte, level int) {
+	kvs := make(map[string]string, len(n.Keys))
+	for i, k := range n.Keys {
+		kvs["Key"+strconv.Itoa(i)] = string(k)
+	}
+	ast.DumpHelper(n, source, level, kvs, nil)
+}
+
+// CitationParser is a goldmark inline parser for Pandoc-style citations.
+// It recognises [@key] and [@key1; @key2], producing Citation nodes.
+var CitationParser parser.InlineParser = &citationParser{}
+
+type citationParser struct{}
+
+func (p *citationParser) Trigger() []byte { return []byte{'['} }
+
+func (p *citationParser) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.Node {
+	line, _ := block.PeekLine()
+	if len(line) < 3 || line[1] != '@' {
+		return nil
+	}
+	end := bytes.IndexByte(line, ']')
+	if end < 0 {
+		return nil
+	}
+	// inner is "key1; @key2; @key3" (first '@' already consumed by the '[' + '@' check)
+	inner := line[2:end]
+	parts := bytes.Split(inner, []byte("; @"))
+	c := &Citation{}
+	for _, part := range parts {
+		key := bytes.TrimSpace(part)
+		if len(key) > 0 {
+			c.Keys = append(c.Keys, key)
+		}
+	}
+	if len(c.Keys) == 0 {
+		return nil
+	}
+	block.Advance(end + 1)
+	return c
 }
 
 // TableCaptionTransformer is a parser.ASTTransformer that converts a `: caption`
@@ -143,6 +205,9 @@ func (r *Renderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(extast.KindTableRow, r.renderTableRow)
 	reg.Register(extast.KindTableCell, r.renderTableCell)
 
+	// citations
+	reg.Register(KindCitation, r.renderCitation)
+
 	// inlines
 	reg.Register(ast.KindAutoLink, r.renderAutoLink)
 	reg.Register(ast.KindCodeSpan, r.renderCodeSpan)
@@ -156,7 +221,17 @@ func (r *Renderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 
 func (r *Renderer) renderDocument(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	if !entering {
-		// End of program.
+		if r.Config.BibFile != "" {
+			style := r.Config.BibStyle
+			if style == "" {
+				style = "plain"
+			}
+			_, _ = w.WriteString("\\bibliographystyle{")
+			_, _ = w.WriteString(style)
+			_, _ = w.WriteString("}\n\\bibliography{")
+			_, _ = w.WriteString(r.Config.BibFile)
+			_, _ = w.WriteString("}\n")
+		}
 		if !r.Config.NoPreamble {
 			w.WriteString("\n\\end{document}\n")
 		}
@@ -368,6 +443,28 @@ func (r *Renderer) renderTable(w util.BufWriter, source []byte, node ast.Node, e
 	return ast.WalkContinue, nil
 }
 
+func (r *Renderer) renderCitation(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	if !entering {
+		return ast.WalkSkipChildren, nil
+	}
+	n := node.(*Citation)
+	cmd := r.Config.CiteCmd
+	if cmd == "" {
+		cmd = "cite"
+	}
+	_, _ = w.WriteString("\\")
+	_, _ = w.WriteString(cmd)
+	_ = w.WriteByte('{')
+	for i, key := range n.Keys {
+		if i > 0 {
+			_ = w.WriteByte(',')
+		}
+		_, _ = w.Write(key)
+	}
+	_ = w.WriteByte('}')
+	return ast.WalkSkipChildren, nil
+}
+
 func (r *Renderer) renderTableCaption(w util.BufWriter, source []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
 	if !r.Config.EnableTableCaptions {
 		return ast.WalkSkipChildren, nil
@@ -466,9 +563,10 @@ func (r *Renderer) renderEmphasis(w util.BufWriter, source []byte, node ast.Node
 		)
 		n := node.(*ast.Emphasis)
 		tag := emph
-		if n.Level == 2 {
+		switch n.Level {
+		case 2:
 			tag = bold
-		} else if n.Level == 3 {
+		case 3:
 			tag = emph3
 		}
 		w.WriteString(tag)
@@ -539,14 +637,6 @@ func (r *Renderer) renderString(w util.BufWriter, source []byte, node ast.Node, 
 	return ast.WalkContinue, nil
 }
 
-func (r *Renderer) writeLines(w util.BufWriter, source []byte, n ast.Node) {
-	l := n.Lines().Len()
-	for i := 0; i < l; i++ {
-		line := n.Lines().At(i)
-		escapeLaTeX(w, line.Value(source))
-	}
-}
-
 func (r *Renderer) writeRawLines(w util.BufWriter, source []byte, n ast.Node) {
 	l := n.Lines().Len()
 	for i := 0; i < l; i++ {
@@ -586,9 +676,6 @@ var (
 	endCmdPrefix    = []byte("\\end")
 	mailToPrefix    = []byte(":mailto")
 	hardBreak       = []byte("\\\\\n\n")
-	softBreak       = []byte("\n\n")
-	strikeStart     = []byte("\\sout{") // Using ulem package.
-	hrefStart       = []byte("\\href{")
 	codeSpanStart   = []byte("\\texttt{")
 	blockQuoteStart = []byte("\n\\begin{framed}\n\\begin{quote}\n")
 	blockQuoteEnd   = []byte("\\end{quote}\n\\end{framed}\n")
@@ -597,8 +684,6 @@ var (
 	hruleCommand    = []byte("\n\\hrulefill\n")
 
 	itemCommand  = []byte("\\item~ ")
-	tableStart   = []byte("\n\\begin{table}\n")
-	tableEnd     = []byte("\n\\end{table}\n")
 	headingTable = [6][2][]byte{
 		// {[]byte("\\part{"), []byte("\\part*{")},
 		// {[]byte("\\chapter{"), []byte("\\chapter*{")},
