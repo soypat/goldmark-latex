@@ -105,7 +105,7 @@ func renderCite(t *testing.T, cfg latex.Config, input string) string {
 	md := goldmark.New(
 		goldmark.WithRenderer(rd),
 		goldmark.WithParserOptions(
-			parser.WithInlineParsers(util.Prioritized(latex.CitationParser, 999)),
+			parser.WithInlineParsers(util.Prioritized(latex.CitationParser, 150)),
 		),
 	)
 	var out bytes.Buffer
@@ -117,7 +117,7 @@ func renderCite(t *testing.T, cfg latex.Config, input string) string {
 
 func TestCitationSingle(t *testing.T) {
 	got := strings.TrimSpace(renderCite(t, latex.Config{NoPreamble: true}, "See [@darwin1859]."))
-	want := `See \cite{darwin1859}.`
+	want := `See \cite{darwin1859}.\\`
 	if got != want {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
@@ -125,7 +125,7 @@ func TestCitationSingle(t *testing.T) {
 
 func TestCitationMultipleKeys(t *testing.T) {
 	got := strings.TrimSpace(renderCite(t, latex.Config{NoPreamble: true}, "[@key1; @key2]"))
-	want := `\cite{key1,key2}`
+	want := `\cite{key1,key2}\\`
 	if got != want {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
@@ -133,7 +133,7 @@ func TestCitationMultipleKeys(t *testing.T) {
 
 func TestCitationCustomCmd(t *testing.T) {
 	got := strings.TrimSpace(renderCite(t, latex.Config{NoPreamble: true, CiteCmd: "citep"}, "[@key]"))
-	want := `\citep{key}`
+	want := `\citep{key}\\`
 	if got != want {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}

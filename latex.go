@@ -95,6 +95,9 @@ func (n *Citation) Dump(source []byte, level int) {
 
 // CitationParser is a goldmark inline parser for Pandoc-style citations.
 // It recognises [@key] and [@key1; @key2], producing Citation nodes.
+// Register it with a priority lower than 200 (goldmark's link parser priority)
+// so it runs before the link parser, which otherwise consumes all '[' tokens first.
+// Example: util.Prioritized(CitationParser, 150).
 var CitationParser parser.InlineParser = &citationParser{}
 
 type citationParser struct{}
