@@ -115,6 +115,80 @@ func renderCite(t *testing.T, cfg latex.Config, input string) string {
 	return out.String()
 }
 
+func renderMath(t *testing.T, input string) string {
+	t.Helper()
+	lr := latex.NewRenderer(latex.Config{NoPreamble: true})
+	rd := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(lr, 1000)))
+	md := goldmark.New(
+		goldmark.WithRenderer(rd),
+		goldmark.WithParserOptions(
+			parser.WithInlineParsers(util.Prioritized(latex.InlineMathParser, 150)),
+		),
+	)
+	var out bytes.Buffer
+	if err := md.Convert([]byte(input), &out); err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(out.String())
+}
+
+func TestInlineMathBasic(t *testing.T) {
+	got := renderMath(t, "$x + y$")
+	want := `$x + y$\\`
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestInlineMathWithSpaces(t *testing.T) {
+	got := renderMath(t, "$ a $")
+	want := `$ a $\\`
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestInlineMathInSentence(t *testing.T) {
+	got := renderMath(t, `See $E=mc^2$.`)
+	want := `See $E=mc^2$.\\`
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestInlineMathUnmatched(t *testing.T) {
+	got := renderMath(t, "cost is $5")
+	want := `cost is \$5\\`
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestInlineMathEmptyRejected(t *testing.T) {
+	got := renderMath(t, "$$")
+	want := `\$\$\\`
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestInlineMathMultiple(t *testing.T) {
+	got := renderMath(t, "Values $x$ and $y$ are real.")
+	want := `Values $x$ and $y$ are real.\\`
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestInlineMathOddCount(t *testing.T) {
+	// Greedy left-to-right: $a$ and $b$ match; the trailing $c has no closing $ → escaped.
+	got := renderMath(t, "$a$ $b$ $c")
+	want := `$a$ $b$ \$c\\`
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 func TestCitationSingle(t *testing.T) {
 	got := strings.TrimSpace(renderCite(t, latex.Config{NoPreamble: true}, "See [@darwin1859]."))
 	want := `See \cite{darwin1859}.\\`

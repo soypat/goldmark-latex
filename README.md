@@ -10,6 +10,18 @@ So far this implementation renders the CommonMark specification with the excepti
 
 ## Extensions
 
+### Inline Math
+
+`$...$` expressions are passed through as LaTeX inline math. The closing `$` must appear on the same line. An unmatched `$` is escaped to `\$` as usual.
+
+| Markdown | LaTeX |
+|---|---|
+| `$x + y$` | `$x + y$` |
+| `See $E=mc^2$.` | `See $E=mc^2$.` |
+| `cost is $5` | `cost is \$5` |
+
+Register `InlineMathParser` to enable this feature.
+
 ### GFM Tables
 
 Pipe tables are rendered as `tabular` environments. Column alignment from the delimiter row (`:---`, `:---:`, `---:`) maps to `l`, `c`, `r` in the column spec.

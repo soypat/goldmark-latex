@@ -28,6 +28,7 @@ var (
 	unsafe           bool
 	tableCaptions    bool
 	citations        bool
+	inlineMath       bool
 	preambleFilename string
 	outputFilename   string
 	bibFile          string
@@ -47,6 +48,7 @@ func main() {
 	flag.BoolVar(&noPreamble, "nopreamble", false, "Forcibly omits preamble and \\begin{document} and \\end{document} statements.")
 	flag.BoolVar(&tableCaptions, "tablecaptions", false, "Enable table captions via ': caption text' paragraph after a table.")
 	flag.BoolVar(&citations, "citations", false, "Enable Pandoc-style [@key] citation parsing.")
+	flag.BoolVar(&inlineMath, "inlinemath", false, "Enable $...$ inline math passthrough (closing $ must be on the same line).")
 	flag.StringVar(&bibFile, "bibfile", "", "Bibliography file name passed to \\bibliography{}. Implies -citations.")
 	flag.StringVar(&bibStyle, "bibstyle", "", "Bibliography style passed to \\bibliographystyle{}. Defaults to \"plain\" when -bibfile is set.")
 	flag.StringVar(&citeCmd, "citecmd", "", "LaTeX cite command to use (e.g. citep). Defaults to \"cite\".")
@@ -130,6 +132,9 @@ func renderGoldmark(input []byte) ([]byte, error) {
 	}
 	if citations || bibFile != "" {
 		parserOpts = append(parserOpts, parser.WithInlineParsers(util.Prioritized(latex.CitationParser, 150)))
+	}
+	if inlineMath {
+		parserOpts = append(parserOpts, parser.WithInlineParsers(util.Prioritized(latex.InlineMathParser, 150)))
 	}
 	md := goldmark.New(
 		goldmark.WithRenderer(rd),

@@ -130,6 +130,46 @@ func (p *citationParser) Parse(parent ast.Node, block text.Reader, pc parser.Con
 	return c
 }
 
+// InlineMath is an inline AST node representing a LaTeX inline math expression.
+// Syntax: $content$ — the closing $ must appear on the same line.
+type InlineMath struct {
+	ast.BaseInline
+	Content []byte
+}
+
+// KindInlineMath is the NodeKind for InlineMath nodes.
+var KindInlineMath = ast.NewNodeKind("InlineMath")
+
+func (n *InlineMath) Kind() ast.NodeKind { return KindInlineMath }
+func (n *InlineMath) Dump(source []byte, level int) {
+	ast.DumpHelper(n, source, level, map[string]string{"Content": string(n.Content)}, nil)
+}
+
+// InlineMathParser is a goldmark inline parser for $...$ inline math expressions.
+// The closing $ must appear before the end of the current line; unmatched $ signs
+// fall through and are escaped to \$ by the renderer.
+// Example registration: util.Prioritized(InlineMathParser, 150).
+var InlineMathParser parser.InlineParser = &inlineMathParser{}
+
+type inlineMathParser struct{}
+
+func (p *inlineMathParser) Trigger() []byte { return []byte{'$'} }
+
+func (p *inlineMathParser) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.Node {
+	line, _ := block.PeekLine()
+	// line[0] == '$'; search for the closing '$' on the same line
+	end := bytes.IndexByte(line[1:], '$')
+	if end < 0 {
+		return nil
+	}
+	content := line[1 : end+1]
+	if len(bytes.TrimSpace(content)) == 0 {
+		return nil // reject $$
+	}
+	block.Advance(end + 2) // consume opening '$', content, and closing '$'
+	return &InlineMath{Content: content}
+}
+
 // TableCaptionTransformer is a parser.ASTTransformer that converts a `: caption`
 // paragraph immediately following a table into a TableCaption node.
 // Register it with priority < 0 so it runs after goldmark's table transformer (priority 0).
@@ -210,6 +250,9 @@ func (r *Renderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 
 	// citations
 	reg.Register(KindCitation, r.renderCitation)
+
+	// inline math
+	reg.Register(KindInlineMath, r.renderInlineMath)
 
 	// inlines
 	reg.Register(ast.KindAutoLink, r.renderAutoLink)
@@ -465,6 +508,17 @@ func (r *Renderer) renderCitation(w util.BufWriter, source []byte, node ast.Node
 		_, _ = w.Write(key)
 	}
 	_ = w.WriteByte('}')
+	return ast.WalkSkipChildren, nil
+}
+
+func (r *Renderer) renderInlineMath(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	if !entering {
+		return ast.WalkSkipChildren, nil
+	}
+	n := node.(*InlineMath)
+	_ = w.WriteByte('$')
+	_, _ = w.Write(n.Content)
+	_ = w.WriteByte('$')
 	return ast.WalkSkipChildren, nil
 }
 
