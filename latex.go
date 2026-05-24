@@ -178,6 +178,15 @@ var TableCaptionTransformer parser.ASTTransformer = &tableCaptionTransformer{}
 type tableCaptionTransformer struct{}
 
 func (t *tableCaptionTransformer) Transform(node *ast.Document, reader text.Reader, pc parser.Context) {
+	// Two-pass approach: collect candidates first, then replace.
+	// Replacing a node during ast.Walk clears its sibling links via ReplaceChild,
+	// which would cut the walk short and miss subsequent captions.
+	type candidate struct {
+		para      ast.Node
+		firstText *ast.Text
+		seg       text.Segment
+	}
+	var candidates []candidate
 	ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering || n.Kind() != ast.KindParagraph {
 			return ast.WalkContinue, nil
@@ -194,16 +203,19 @@ func (t *tableCaptionTransformer) Transform(node *ast.Document, reader text.Read
 		if !bytes.HasPrefix(seg.Value(reader.Source()), []byte(": ")) {
 			return ast.WalkContinue, nil
 		}
-		firstChild.(*ast.Text).Segment = seg.WithStart(seg.Start + 2)
-		caption := &TableCaption{}
-		for c := n.FirstChild(); c != nil; {
-			next := c.NextSibling()
-			caption.AppendChild(caption, c)
-			c = next
-		}
-		n.Parent().ReplaceChild(n.Parent(), n, caption)
+		candidates = append(candidates, candidate{n, firstChild.(*ast.Text), seg})
 		return ast.WalkContinue, nil
 	})
+	for _, c := range candidates {
+		c.firstText.Segment = c.seg.WithStart(c.seg.Start + 2)
+		caption := &TableCaption{}
+		for child := c.para.FirstChild(); child != nil; {
+			next := child.NextSibling()
+			caption.AppendChild(caption, child)
+			child = next
+		}
+		c.para.Parent().ReplaceChild(c.para.Parent(), c.para, caption)
+	}
 }
 
 // NewRenderer returns a new Renderer with given options.

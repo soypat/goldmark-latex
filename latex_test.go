@@ -110,6 +110,34 @@ A & B \\
 \caption{My caption}
 \end{table}`,
 		},
+		{
+			// Two tables with captions: the second caption was silently dropped because
+			// ReplaceChild clears the replaced node's sibling links, cutting the ast.Walk short.
+			input: "| A | B |\n| - | - |\n| 1 | 2 |\n\n: Caption one\n\n| X | Y |\n| - | - |\n| 3 | 4 |\n\n: Caption two\n",
+			want: `\begin{table}[h!]
+\centering
+\begin{tabular}{ll}
+\hline
+A & B \\
+\hline
+1 & 2 \\
+\hline
+\end{tabular}
+\caption{Caption one}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{ll}
+\hline
+X & Y \\
+\hline
+3 & 4 \\
+\hline
+\end{tabular}
+\caption{Caption two}
+\end{table}`,
+		},
 	}
 	for _, c := range cases {
 		lr := latex.NewRenderer(latex.Config{NoPreamble: true, EnableTableCaptions: true})
