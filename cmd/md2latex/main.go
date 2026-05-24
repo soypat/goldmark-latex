@@ -27,8 +27,12 @@ var (
 	unhead           bool
 	unsafe           bool
 	tableCaptions    bool
+	citations        bool
 	preambleFilename string
 	outputFilename   string
+	bibFile          string
+	bibStyle         string
+	citeCmd          string
 	headingOffset    int
 	noPreamble       bool
 )
@@ -42,6 +46,10 @@ func main() {
 	flag.StringVar(&outputFilename, "o", "", "Output filename. By default just adds .tex to input filename.")
 	flag.BoolVar(&noPreamble, "nopreamble", false, "Forcibly omits preamble and \\begin{document} and \\end{document} statements.")
 	flag.BoolVar(&tableCaptions, "tablecaptions", false, "Enable table captions via ': caption text' paragraph after a table.")
+	flag.BoolVar(&citations, "citations", false, "Enable Pandoc-style [@key] citation parsing.")
+	flag.StringVar(&bibFile, "bibfile", "", "Bibliography file name passed to \\bibliography{}. Implies -citations.")
+	flag.StringVar(&bibStyle, "bibstyle", "", "Bibliography style passed to \\bibliographystyle{}. Defaults to \"plain\" when -bibfile is set.")
+	flag.StringVar(&citeCmd, "citecmd", "", "LaTeX cite command to use (e.g. citep). Defaults to \"cite\".")
 	flag.StringVar(&preambleFilename, "preamble", "", "Preamble filename. If not set uses a default preamble.")
 	flag.IntVar(&headingOffset, "headingoffset", 0, "Section heading offset. Can be negative. Results are clipped between 1 and 6.")
 	flag.Parse()
@@ -108,6 +116,9 @@ func renderGoldmark(input []byte) ([]byte, error) {
 			HeadingLevelOffset:  headingOffset,
 			NoPreamble:          noPreamble,
 			EnableTableCaptions: tableCaptions,
+			BibFile:             bibFile,
+			BibStyle:            bibStyle,
+			CiteCmd:             citeCmd,
 		}), 1000)))
 	}
 	parserOpts := []parser.Option{
@@ -116,6 +127,9 @@ func renderGoldmark(input []byte) ([]byte, error) {
 	}
 	if tableCaptions {
 		parserOpts = append(parserOpts, parser.WithASTTransformers(util.Prioritized(latex.TableCaptionTransformer, -1)))
+	}
+	if citations || bibFile != "" {
+		parserOpts = append(parserOpts, parser.WithInlineParsers(util.Prioritized(latex.CitationParser, 150)))
 	}
 	md := goldmark.New(
 		goldmark.WithRenderer(rd),
