@@ -448,6 +448,11 @@ func (r *Renderer) renderListItem(w util.BufWriter, source []byte, n ast.Node, e
 
 func (r *Renderer) renderParagraph(w util.BufWriter, source []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
 	if !entering {
+		// A paragraph holding only an image renders as a figure float; a
+		// trailing \\ after \end{figure} is invalid LaTeX, so suppress it.
+		if c := n.FirstChild(); c != nil && c == n.LastChild() && c.Kind() == ast.KindImage {
+			return ast.WalkContinue, nil
+		}
 		parent := n.Parent()
 		pkind := parent.Kind()
 		if pkind != ast.KindList && pkind != ast.KindListItem {
@@ -661,9 +666,28 @@ func (r *Renderer) renderLink(w util.BufWriter, source []byte, node ast.Node, en
 }
 
 func (r *Renderer) renderImage(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
-	// No image rendering implemented yet.
-	w.WriteString("\n% goldmark-latex: image rendering unsupported as of yet\n")
-	return ast.WalkSkipChildren, nil
+	n := node.(*ast.Image)
+	if !r.Config.Unsafe && html.IsDangerousURL(n.Destination) {
+		return ast.WalkSkipChildren, nil
+	}
+	// The alt text (the node's children) becomes the figure caption.
+	hasCaption := n.HasChildren()
+	if entering {
+		_, _ = w.WriteString("\n\\begin{figure}[h]\n\\centering\n\\includegraphics[width=\\textwidth]{")
+		// The destination is a file path and must be written literally;
+		// LaTeX-escaping it would corrupt characters such as '_' in filenames.
+		_, _ = w.Write(n.Destination)
+		_, _ = w.WriteString("}\n")
+		if hasCaption {
+			_, _ = w.WriteString("\\caption{")
+		}
+	} else {
+		if hasCaption {
+			_, _ = w.WriteString("}\n")
+		}
+		_, _ = w.WriteString("\\end{figure}\n")
+	}
+	return ast.WalkContinue, nil
 }
 
 func (r *Renderer) renderRawHTML(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {

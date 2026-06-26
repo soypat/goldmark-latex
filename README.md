@@ -76,6 +76,26 @@ A & B \\
 \end{table}
 ```
 
+### Figures
+
+Markdown images render as `figure` floats wrapping `\includegraphics`. The alt text becomes the figure caption (omitted when empty). The destination is written verbatim so file paths with characters such as `_` are preserved. Dangerous URLs are dropped unless `Config.Unsafe` is set. Requires the `graphicx` package (included in the default preamble).
+
+Input:
+
+```markdown
+![A cute cat](cat_photo.png)
+```
+
+Output:
+
+```latex
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{cat_photo.png}
+\caption{A cute cat}
+\end{figure}
+```
+
 ### Citations and Bibliography
 
 Enabled by registering `CitationParser`. Converts Pandoc-style `[@key]` inline citations to `\cite{key}`. Multiple keys are separated by `; @`.

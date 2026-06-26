@@ -162,6 +162,56 @@ X & Y \\
 
 }
 
+func TestImageRendering(t *testing.T) {
+	cases := []struct {
+		name  string
+		cfg   latex.Config
+		input string
+		want  string
+	}{
+		{
+			name:  "with alt text caption",
+			cfg:   latex.Config{NoPreamble: true},
+			input: "![A cute cat](cat_photo.png)\n",
+			want: `\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{cat_photo.png}
+\caption{A cute cat}
+\end{figure}`,
+		},
+		{
+			name:  "no alt text omits caption",
+			cfg:   latex.Config{NoPreamble: true},
+			input: "![](diagram.pdf)\n",
+			want: `\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{diagram.pdf}
+\end{figure}`,
+		},
+		{
+			name:  "dangerous url skipped without unsafe",
+			cfg:   latex.Config{NoPreamble: true},
+			input: "![x](javascript:alert(1))\n",
+			want:  "",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			lr := latex.NewRenderer(c.cfg)
+			rd := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(lr, 1000)))
+			md := goldmark.New(goldmark.WithRenderer(rd))
+			var out bytes.Buffer
+			if err := md.Convert([]byte(c.input), &out); err != nil {
+				t.Fatal(err)
+			}
+			got := strings.TrimSpace(out.String())
+			if got != c.want {
+				t.Errorf("image output mismatch\ngot:\n%s\nwant:\n%s", got, c.want)
+			}
+		})
+	}
+}
+
 // renderCite returns the LaTeX output for input using cfg, with the citation
 // inline parser registered. Once the parser is implemented, citations in input
 // will be converted; until then [@key] renders as plain text and these tests fail.
