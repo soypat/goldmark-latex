@@ -42,7 +42,7 @@ func main() {
 	flag.BoolVar(&verbose, "v", false, "Verbose output.")
 	flag.BoolVar(&usehtml, "html", false, "Output html")
 	flag.BoolVar(&print, "p", false, "Output to stdout")
-	flag.BoolVar(&unsafe, "unsafe", false, "Render unsafe segments of document such as links or verbatim.")
+	flag.BoolVar(&unsafe, "unsafe", false, "Render unsafe segments of document such as links, verbatim, or raw LaTeX passthrough blocks (```{=latex} ... ```). Without this flag such blocks are dropped.")
 	flag.BoolVar(&unhead, "unhead", false, "No section numbering")
 	flag.StringVar(&outputFilename, "o", "", "Output filename. By default just adds .tex to input filename.")
 	flag.BoolVar(&noPreamble, "nopreamble", false, "Forcibly omits preamble and \\begin{document} and \\end{document} statements.")

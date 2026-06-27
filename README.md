@@ -96,6 +96,28 @@ Output:
 \end{figure}
 ```
 
+### Raw LaTeX Passthrough
+
+A fenced code block with the pandoc-style `{=latex}` info string emits its contents verbatim, letting you inject arbitrary LaTeX (e.g. `tikzpicture`, custom environments). Because this is arbitrary code injection, it is gated behind `Config.Unsafe` (the `-unsafe` flag in `md2latex`); without it the block is dropped with a comment.
+
+Input:
+
+````markdown
+```{=latex}
+\begin{tikzpicture}
+\draw (0,0) -- (1,1);
+\end{tikzpicture}
+```
+````
+
+Output (with `Config.Unsafe`):
+
+```latex
+\begin{tikzpicture}
+\draw (0,0) -- (1,1);
+\end{tikzpicture}
+```
+
 ### Citations and Bibliography
 
 Enabled by registering `CitationParser`. Converts Pandoc-style `[@key]` inline citations to `\cite{key}`. Multiple keys are separated by `; @`.

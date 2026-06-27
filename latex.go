@@ -390,6 +390,20 @@ func (r *Renderer) renderCodeBlock(w util.BufWriter, source []byte, n ast.Node, 
 
 func (r *Renderer) renderFencedCodeBlock(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	n := node.(*ast.FencedCodeBlock)
+	if bytes.Equal(n.Language(source), rawLatexInfo) {
+		// Pandoc-style raw LaTeX passthrough: a ```{=latex} fence emits its
+		// contents verbatim. This is arbitrary code injection, so it is gated
+		// behind Config.Unsafe; otherwise the block is dropped.
+		if entering {
+			if r.Config.Unsafe {
+				_ = w.WriteByte('\n')
+				r.writeRawLines(w, source, n)
+			} else {
+				_, _ = w.WriteString("\n% goldmark-latex: raw LaTeX block skipped; enable Unsafe to emit it\n")
+			}
+		}
+		return ast.WalkContinue, nil
+	}
 	if entering {
 		_, _ = w.Write(blockCodeStart)
 		language := n.Language(source)
@@ -767,6 +781,7 @@ func bool2int(b bool) int {
 
 var (
 	endCmdPrefix    = []byte("\\end")
+	rawLatexInfo    = []byte("{=latex}")
 	mailToPrefix    = []byte(":mailto")
 	hardBreak       = []byte("\\\\\n\n")
 	codeSpanStart   = []byte("\\texttt{")

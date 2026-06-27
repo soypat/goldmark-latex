@@ -212,6 +212,34 @@ func TestImageRendering(t *testing.T) {
 	}
 }
 
+// TestRawLatexPassthrough covers the raw LaTeX passthrough feature: a fenced
+// code block with the pandoc-style `{=latex}` info string emits its contents
+// verbatim (no lstlisting wrapper, no escaping) so users can inject arbitrary
+// LaTeX. Because this is arbitrary code injection it is gated behind
+// Config.Unsafe; without it the block is dropped (see renderFencedCodeBlock).
+func TestRawLatexPassthrough(t *testing.T) {
+	const input = "```{=latex}\n" +
+		"\\begin{tikzpicture}\n" +
+		"\\draw (0,0) -- (1,1);\n" +
+		"\\end{tikzpicture}\n" +
+		"```\n"
+	const want = `\begin{tikzpicture}
+\draw (0,0) -- (1,1);
+\end{tikzpicture}`
+
+	lr := latex.NewRenderer(latex.Config{NoPreamble: true, Unsafe: true})
+	rd := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(lr, 1000)))
+	md := goldmark.New(goldmark.WithRenderer(rd))
+	var out bytes.Buffer
+	if err := md.Convert([]byte(input), &out); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.TrimSpace(out.String())
+	if got != want {
+		t.Errorf("raw latex passthrough mismatch\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 // renderCite returns the LaTeX output for input using cfg, with the citation
 // inline parser registered. Once the parser is implemented, citations in input
 // will be converted; until then [@key] renders as plain text and these tests fail.
